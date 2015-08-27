@@ -65,11 +65,12 @@ class DistributionJobThread extends Thread {
     public static boolean compareAndIncrement(EdgeAnalog edge, IAtomicLong hazelcastCount,
                                               long expectedValue, AtomicLong realCount) {
         synchronized (realTransferCounts) {
-            if (hazelcastCount.compareAndSet(expectedValue, expectedValue + 1)) {
+            long newValue = expectedValue + 1
+            if (hazelcastCount.compareAndSet(expectedValue, newValue)) {
                 def realValue = realCount.incrementAndGet()
-                if (realValue != expectedValue + 1) {
+                if (realValue != newValue) {
                     log.error("Detected bad transfer count ${edge} RealCount: ${realValue}, " +
-                            "HazlecastCount: ${expectedValue + 1}")
+                            "HazlecastCount: ${newValue}, HazelcastPreviousValue: ${expectedValue}")
                 }
                 return true
             } else {
@@ -93,15 +94,16 @@ class DistributionJobThread extends Thread {
     public class FileTransferRunnable implements Runnable {
         @Override
         void run() {
+            AtomicLong realCount
+            boolean claimed = false
             try {
                 while (!stop) {
                     def fileTransfer = fileTransferQueue.poll()
                     if (fileTransfer) {
+                        claimed = false
                         IAtomicLong transferCount = hazelcastInstance.getAtomicLong(fileTransfer.edge.key)
-                        AtomicLong realCount = getRealTransferCount(fileTransfer.edge)
+                        realCount = getRealTransferCount(fileTransfer.edge)
                         long currentCount = transferCount.get()
-                        //long currentCount = transferCount.alterAndGet( new CheckNotNegativeAndGetFunction() )
-                        boolean claimed = false
                         while (!stop && currentCount < fileTransfer.edge.maxTransfers) {
                             if (compareAndIncrement(fileTransfer.edge, transferCount, currentCount, realCount)) {
                                 log.debug("Claimed transfer ${fileTransfer}. EdgeCount = ${currentCount + 1}")
@@ -110,13 +112,11 @@ class DistributionJobThread extends Thread {
                                 def sleepTime = rand.nextInt(interval) + TRANSFER_TIME_MIN
                                 sleep(sleepTime)
                                 long newCount = decrementAndGet(fileTransfer.edge, transferCount, realCount)
-                                //long newCount = transferCount.alterAndGet( new DecrementIfGreaterThanZeroFunction() )
                                 log.debug("Finished transfer ${fileTransfer}. EdgeCount = ${newCount}")
                                 break
                             }
 
                             currentCount = transferCount.get()
-                            //currentCount = transferCount.alterAndGet( new CheckNotNegativeAndGetFunction() )
                         }
 
                         if (!claimed) {
@@ -128,31 +128,10 @@ class DistributionJobThread extends Thread {
                 log.info("Aborting because hazelcast shutdown.")
             } catch (Exception ex) {
                 log.error("FileTransfer error", ex)
-            }
-
-        }
-    }
-
-    private static class DecrementIfGreaterThanZeroFunction implements IFunction<Long, Long> {
-        @Override
-        public Long apply(Long input) {
-            if (input >= 0) {
-                return input--
-            } else {
-                log.error("Detected negative transfer count ${input}")
-                return 0l
-            }
-        }
-    }
-
-    private static class CheckNotNegativeAndGetFunction implements IFunction<Long, Long> {
-        @Override
-        public Long apply(Long input) {
-            if (input >= 0) {
-                return input
-            } else {
-                log.error("Detected negative transfer count ${input}")
-                return 0l
+            } finally {
+                if(claimed && realCount) {
+                    realCount.decrementAndGet()
+                }
             }
         }
     }

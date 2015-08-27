@@ -44,7 +44,7 @@ class DistributionSim {
         log.info("Shutting down ${distributionJobThread}")
         distributionJobThread.stop = true
 
-        sleep(15000)
+        sleep(60000)
 
         djThreads.each {
             it.stop = true
