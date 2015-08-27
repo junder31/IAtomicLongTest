@@ -11,7 +11,7 @@ buildscript {
 sourceCompatibility = 1.7
 group = 'com.clearleap.cloffice'
 version = '1.0'
-mainClassName = 'com.clearleap.HazelcastCommentLineClient'
+mainClassName = 'com.clearleap.DistributionSim'
 
 repositories {
     mavenLocal()
