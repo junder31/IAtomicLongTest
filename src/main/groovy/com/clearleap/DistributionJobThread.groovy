@@ -4,7 +4,6 @@ import com.hazelcast.core.Hazelcast
 import com.hazelcast.core.HazelcastInstance
 import com.hazelcast.core.HazelcastInstanceNotActiveException
 import com.hazelcast.core.IAtomicLong
-import com.hazelcast.core.IFunction
 import groovy.util.logging.Slf4j
 
 import java.util.concurrent.ConcurrentHashMap
